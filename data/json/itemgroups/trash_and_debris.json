@@ -163,9 +163,13 @@
       [ "syringe", 3 ],
       [ "spike", 3 ],
       [ "thermos", 3 ],
-      [ "bag_body_bag", 1 ],
-      { "group": "loose_chess_pieces", "prob": 1 }
+      [ "bag_body_bag", 1 ]
     ]
+  },
+  {
+    "type": "item_group",
+    "id": "dead_vegetation",
+    "items": [ { "item": "twig", "prob": 15, "count": [ 5, 20 ] }, [ "withered", 60 ], [ "stick_long", 15 ], [ "stick", 30 ] ]
   },
   {
     "type": "item_group",
@@ -174,8 +178,6 @@
     "magazine": 50,
     "items": [
       [ "plastic_shopping_bag", 35 ],
-      { "prob": 5, "group": "iodine_bottle_plastic_pill_supplement_1_10" },
-      { "prob": 5, "group": "prussian_blue_bottle_plastic_pill_supplement_1_10" },
       [ "bum_wine", 5 ],
       { "prob": 2, "group": "meth_bag_zipper_1_6" },
       { "prob": 1, "group": "heroin_bag_zipper_1_4" },
@@ -219,10 +221,8 @@
       [ "software_hacking", 10 ],
       [ "news_regional", 8 ],
       { "group": "newspaper", "prob": 10 },
-      { "group": "loose_chess_pieces", "prob": 1 },
       [ "file", 5 ],
       [ "decoy_elfa", 10 ],
-      [ "recipe_elfa", 1 ],
       [ "jug_plastic", 10 ],
       [ "fuel_tin", 8 ],
       [ "spray_can", 50 ],
@@ -267,7 +267,7 @@
       [ "survnote", 1 ],
       { "item": "lighter", "prob": 3, "charges-min": 0, "charges-max": 10 },
       [ "flyer", 3 ],
-      { "group": "loose_chess_pieces", "prob": 1 }
+      { "group": "pillbox_any_empty", "prob": 1 }
     ]
   },
   {
@@ -385,6 +385,18 @@
       { "item": "wood_panel", "prob": 10 },
       { "item": "splinter", "count": [ 1, 2 ] },
       { "item": "nail", "charges": [ 0, 2 ] }
+    ]
+  },
+  {
+    "id": "rolling_trash",
+    "type": "item_group",
+    "subtype": "collection",
+    "container-item": "bag_garbage",
+    "on_overflow": "spill",
+    "items": [
+      { "group": "trash_domestic", "count": [ 0, 35 ] },
+      { "group": "trash_cart", "count": [ 0, 10 ] },
+      { "group": "trash", "count": [ 0, 15 ] }
     ]
   }
 ]

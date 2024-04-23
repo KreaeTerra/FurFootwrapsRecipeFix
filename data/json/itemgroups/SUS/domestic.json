@@ -545,7 +545,7 @@
       { "count": [ 1, 10 ], "prob": 40, "group": "tea_green_raw_bag_plastic_33" },
       { "item": "teapot", "prob": 70 },
       { "item": "kettle", "prob": 50 },
-      { "prob": 90, "sealed": false, "group": "sugar_jar_glass_sealed_10_120" },
+      { "prob": 90, "sealed": false, "group": "sugar_jar_glass_sealed_10_140" },
       {
         "distribution": [
           {
@@ -732,7 +732,7 @@
       { "group": "pepper_bag_plastic_100" },
       { "prob": 75, "group": "cinnamon_bag_plastic_100" },
       { "prob": 75, "group": "chilly-p_bag_plastic_100" },
-      { "prob": 15, "group": "sugar_box_small_71" },
+      { "prob": 15, "group": "sugar_packed" },
       { "prob": 5, "group": "artificial_sweetener_box_small_71" },
       { "prob": 25, "group": "curry_powder_bag_plastic_100" },
       { "prob": 25, "group": "garlic_powder_bag_plastic_100" },
@@ -1085,8 +1085,7 @@
       { "group": "pants_unisex", "prob": 50 },
       { "group": "pants_male", "prob": 60 },
       { "group": "gloves_unisex", "prob": 30 },
-      { "group": "hats_unisex", "prob": 10 },
-      { "group": "loose_chess_pieces", "prob": 1 }
+      { "group": "hats_unisex", "prob": 10 }
     ]
   },
   {
@@ -1108,8 +1107,7 @@
       { "group": "pants_female", "prob": 60 },
       { "group": "gloves_womens", "prob": 5 },
       { "group": "gloves_unisex", "prob": 30 },
-      { "group": "hats_unisex", "prob": 10 },
-      { "group": "loose_chess_pieces", "prob": 1 }
+      { "group": "hats_unisex", "prob": 10 }
     ]
   },
   {
@@ -1127,14 +1125,6 @@
     "//": "This group was created automatically and may contain errors.",
     "container-item": "bottle_plastic_pill_prescription",
     "entries": [ { "item": "weak_antibiotic", "container-item": "null" } ]
-  },
-  {
-    "type": "item_group",
-    "id": "sugar_jar_glass_sealed_10_120",
-    "subtype": "collection",
-    "//": "This group was created automatically and may contain errors.",
-    "container-item": "jar_glass_sealed",
-    "entries": [ { "item": "sugar", "container-item": "null", "count": [ 10, 120 ] } ]
   },
   {
     "type": "item_group",

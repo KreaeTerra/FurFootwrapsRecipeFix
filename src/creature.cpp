@@ -13,11 +13,15 @@
 #include <tuple>
 
 #include "anatomy.h"
-#include "avatar.h"
+#include "body_part_set.h"
 #include "cached_options.h"
 #include "calendar.h"
 #include "cata_assert.h"
+#include "cata_utility.h"
+#include "cata_variant.h"
 #include "character.h"
+#include "character_attire.h"
+#include "character_id.h"
 #include "color.h"
 #include "creature_tracker.h"
 #include "cursesdef.h"
@@ -28,20 +32,26 @@
 #include "enums.h"
 #include "event.h"
 #include "event_bus.h"
+#include "explosion.h"
 #include "field.h"
 #include "flat_set.h"
+#include "flexbuffer_json-inl.h"
+#include "flexbuffer_json.h"
 #include "game.h"
 #include "game_constants.h"
 #include "item.h"
-#include "json.h"
+#include "item_location.h"
+#include "json_error.h"
 #include "level_cache.h"
 #include "lightmap.h"
 #include "line.h"
 #include "localized_comparator.h"
+#include "magic_enchantment.h"
 #include "map.h"
 #include "map_iterator.h"
 #include "mapdata.h"
 #include "mattack_common.h"
+#include "mdarray.h"
 #include "messages.h"
 #include "monster.h"
 #include "morale_types.h"
@@ -52,11 +62,13 @@
 #include "point.h"
 #include "projectile.h"
 #include "rng.h"
+#include "sounds.h"
 #include "talker.h"
 #include "talker_avatar.h"
 #include "talker_character.h"
-#include "talker_npc.h"
 #include "talker_monster.h"
+#include "talker_npc.h"
+#include "translation.h"
 #include "translations.h"
 #include "units.h"
 #include "value_ptr.h"
@@ -72,6 +84,7 @@ static const damage_type_id damage_bash( "bash" );
 static const damage_type_id damage_electric( "electric" );
 static const damage_type_id damage_heat( "heat" );
 
+static const efftype_id effect_all_fours( "all_fours" );
 static const efftype_id effect_blind( "blind" );
 static const efftype_id effect_bounced( "bounced" );
 static const efftype_id effect_downed( "downed" );
@@ -97,6 +110,7 @@ static const efftype_id effect_zapped( "zapped" );
 
 static const field_type_str_id field_fd_last_known( "fd_last_known" );
 
+static const json_character_flag json_flag_BIONIC_LIMB( "BIONIC_LIMB" );
 static const json_character_flag json_flag_IGNORE_TEMP( "IGNORE_TEMP" );
 static const json_character_flag json_flag_LIMB_LOWER( "LIMB_LOWER" );
 static const json_character_flag json_flag_LIMB_UPPER( "LIMB_UPPER" );
@@ -348,7 +362,7 @@ bool Creature::sees( const Creature &critter ) const
         return true;
     }
 
-    if( !fov_3d && posz() != critter.posz() ) {
+    if( std::abs( posz() - critter.posz() ) > fov_3d_z_range ) {
         return false;
     }
 
@@ -430,7 +444,8 @@ bool Creature::sees( const Creature &critter ) const
         return false;
     }
     if( ch != nullptr ) {
-        if( ch->is_crouching() || ch->is_prone() || pos().z != critter.pos().z ) {
+        if( ch->is_crouching() || ch->has_effect( effect_all_fours ) || ch->is_prone() ||
+            pos().z != critter.pos().z ) {
             const int coverage = std::max( here.obstacle_coverage( pos(), critter.pos() ),
                                            here.ledge_coverage( *this, critter.pos() ) );
             if( coverage < 30 ) {
@@ -458,7 +473,7 @@ bool Creature::sees( const Creature &critter ) const
             }
 
             int profile = 120 / size_modifier;
-            if( ch->is_crouching() ) {
+            if( ch->is_crouching() || ch->has_effect( effect_all_fours ) ) {
                 profile *= 0.5;
             } else if( ch->is_prone() ) {
                 profile *= 0.275;
@@ -476,7 +491,7 @@ bool Creature::sees( const Creature &critter ) const
 
 bool Creature::sees( const tripoint &t, bool is_avatar, int range_mod ) const
 {
-    if( !fov_3d && posz() != t.z ) {
+    if( std::abs( posz() - t.z ) > fov_3d_z_range ) {
         return false;
     }
 
@@ -917,7 +932,8 @@ void projectile::apply_effects_damage( Creature &target, Creature *source,
     if( proj_effects.count( "APPLY_SAP" ) ) {
         target.add_effect( effect_source( source ), effect_sap, 1_turns * dealt_dam.total_damage() );
     }
-    if( proj_effects.count( "PARALYZEPOISON" ) && dealt_dam.total_damage() > 0 ) {
+    if( proj_effects.count( "PARALYZEPOISON" ) && dealt_dam.total_damage() > 0 &&
+        !dealt_dam.bp_hit->has_flag( json_flag_BIONIC_LIMB ) ) {
         target.add_msg_if_player( m_bad, _( "You feel poison coursing through your body!" ) );
         target.add_effect( effect_source( source ), effect_paralyzepoison, 5_minutes );
     }
@@ -1063,7 +1079,7 @@ void Creature::messaging_projectile_attack( const Creature *source,
                              direction_from( point_zero, point( posx() - source->posx(), posy() - source->posy() ) ),
                              get_hp_bar( get_hp(), get_hp_max(), true ).first, m_good,
                              //~ "hit points", used in scrolling combat text
-                             _( "hp" ), m_neutral, "hp" );
+                             _( "HP" ), m_neutral, "hp" );
                 } else {
                     SCT.removeCreatureHP();
                 }
@@ -1235,7 +1251,9 @@ dealt_damage_instance Creature::deal_damage( Creature *source, bodypart_id bp,
         // Only deal more HP than remains if damage not including crit multipliers is higher.
         total_damage = clamp( get_hp( bp ), total_base_damage, total_damage );
     }
-    mod_pain( total_pain );
+    if( !bp->has_flag( json_flag_BIONIC_LIMB ) ) {
+        mod_pain( total_pain );
+    }
 
     apply_damage( source, bp, total_damage );
 
@@ -1370,7 +1388,7 @@ bool Creature::stumble_invis( const Creature &player, const bool stumblemsg )
     if( player.has_trait( trait_DEBUG_CLOAK ) ) {
         return false;
     }
-    if( !fov_3d && posz() != player.posz() ) {
+    if( this == &player || !is_adjacent( &player, true ) ) {
         return false;
     }
     if( stumblemsg ) {
@@ -1422,7 +1440,7 @@ bool Creature::attack_air( const tripoint &p )
     return true;
 }
 
-bool Creature::dodge_check( float hit_roll, bool force_try )
+bool Creature::dodge_check( float hit_roll, bool force_try, float )
 {
     // If successfully uncanny dodged, no need to calculate dodge chance
     if( uncanny_dodge() ) {
@@ -1444,12 +1462,13 @@ bool Creature::dodge_check( float hit_roll, bool force_try )
     return false;
 }
 
-bool Creature::dodge_check( monster *z )
+bool Creature::dodge_check( monster *z, float training_level )
 {
-    return dodge_check( z->get_hit() );
+    return dodge_check( z->get_hit(), training_level );
 }
 
-bool Creature::dodge_check( monster *z, bodypart_id bp, const damage_instance &dam_inst )
+bool Creature::dodge_check( monster *z, bodypart_id bp, const damage_instance &dam_inst,
+                            float training_level )
 {
 
     if( is_monster() ) {
@@ -1470,9 +1489,9 @@ bool Creature::dodge_check( monster *z, bodypart_id bp, const damage_instance &d
 
     //If attack might remove more than half of the part's hp, dodge no matter the odds
     if( dmg_ratio >= 0.5f ) {
-        return dodge_check( z->get_hit(), true );
+        return dodge_check( z->get_hit(), true, training_level );
     } else if( dmg_ratio > 0.0f ) { // else apply usual rules
-        return dodge_check( z->get_hit() );
+        return dodge_check( z->get_hit(), training_level );
     }
 
     return false;
@@ -1536,10 +1555,11 @@ void Creature::add_effect( const effect_source &source, const efftype_id &eff_id
     }
 
     // Filter out bodypart immunity
-    for( json_character_flag flag : eff_id->immune_bp_flags )
+    for( json_character_flag flag : eff_id->immune_bp_flags ) {
         if( bp->has_flag( flag ) ) {
             return;
         }
+    }
 
     // Then check if the effect is blocked by another
     for( auto &elem : *effects ) {
@@ -1683,41 +1703,6 @@ bool Creature::add_env_effect( const efftype_id &eff_id, const bodypart_id &vect
 {
     return add_env_effect( eff_id, vector, strength, dur, bodypart_str_id::NULL_ID(), permanent,
                            intensity, force );
-}
-
-bool Creature::add_liquid_effect( const efftype_id &eff_id, const bodypart_id &vector, int strength,
-                                  const time_duration &dur, const bodypart_id &bp, bool permanent, int intensity, bool force )
-{
-    if( !force && is_immune_effect( eff_id ) ) {
-        return false;
-    }
-    if( is_monster() ) {
-        if( dice( strength, 3 ) > dice( get_env_resist( vector ), 3 ) ) {
-            //Monsters don't have clothing wetness multipliers, so we still use enviro for them.
-            add_effect( effect_source::empty(), eff_id, dur, bodypart_str_id::NULL_ID(), permanent, intensity,
-                        true );
-            return true;
-        } else {
-            return false;
-        }
-    }
-    const Character *c = as_character();
-    //d100 minus strength should never be less than 1 so we don't have liquids phasing through sealed power armor.
-    if( std::max( dice( 1, 100 ) - strength,
-                  1 ) < ( c->worn.clothing_wetness_mult( vector ) * 100 ) ) {
-        // Don't check immunity (force == true), because we did check above
-        add_effect( effect_source::empty(), eff_id, dur, bp, permanent, intensity, true );
-        return true;
-    } else {
-        //To do: make absorbent armor filthy, damage it with acid, etc
-        return false;
-    }
-}
-bool Creature::add_liquid_effect( const efftype_id &eff_id, const bodypart_id &vector, int strength,
-                                  const time_duration &dur, bool permanent, int intensity, bool force )
-{
-    return add_liquid_effect( eff_id, vector, strength, dur, bodypart_str_id::NULL_ID(), permanent,
-                              intensity, force );
 }
 
 void Creature::clear_effects()
@@ -1969,8 +1954,13 @@ void Creature::remove_value( const std::string &key )
 
 std::string Creature::get_value( const std::string &key ) const
 {
+    return maybe_get_value( key ).value_or( std::string{} );
+}
+
+std::optional<std::string> Creature::maybe_get_value( const std::string &key ) const
+{
     auto it = values.find( key );
-    return ( it == values.end() ) ? "" : it->second;
+    return it == values.end() ? std::nullopt : std::optional<std::string> { it->second };
 }
 
 void Creature::clear_values()
@@ -2061,6 +2051,29 @@ void Creature::decrement_summon_timer()
     if( lifespan_end.value() <= calendar::turn ) {
         die( nullptr );
     }
+}
+
+Creature *Creature::get_summoner() const
+{
+    if( !summoner ) {
+        return nullptr;
+    } else if( summoner.value() == get_player_character().getID() ) {
+        return &get_player_character();
+    } else {
+        return g->find_npc( summoner.value() );
+    }
+}
+
+void Creature::set_summoner( Creature *const summoner )
+{
+    if( summoner->as_character() != nullptr ) {
+        this->summoner = summoner->as_character()->getID();
+    }
+}
+
+void Creature::set_summoner( character_id summoner )
+{
+    this->summoner = summoner;
 }
 
 int Creature::get_num_blocks() const
@@ -2988,6 +3001,11 @@ std::unordered_map<std::string, std::string> &Creature::get_values()
     return values;
 }
 
+bodypart_id Creature::get_max_hitsize_bodypart() const
+{
+    return anatomy( get_all_body_parts() ).get_max_hitsize_bodypart();
+}
+
 bodypart_id Creature::select_body_part( int min_hit, int max_hit, bool can_attack_high,
                                         int hit_roll ) const
 {
@@ -3144,12 +3162,6 @@ void Creature::add_msg_player_or_npc( const game_message_params &params, const t
                                       const translation &npc ) const
 {
     return add_msg_player_or_npc( params, pc.translated(), npc.translated() );
-}
-
-void Creature::add_msg_debug_player_or_npc( debugmode::debug_filter type, const translation &pc,
-        const translation &npc ) const
-{
-    return add_msg_debug_player_or_npc( type, pc.translated(), npc.translated() );
 }
 
 void Creature::add_msg_player_or_say( const translation &pc, const translation &npc ) const

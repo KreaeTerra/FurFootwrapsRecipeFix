@@ -907,15 +907,6 @@
     "can_resume": false
   },
   {
-    "id": "ACT_MUTANT_TREE_COMMUNION",
-    "type": "activity_type",
-    "activity_level": "NO_EXERCISE",
-    "verb": "communing with the mutant tree",
-    "rooted": true,
-    "based_on": "time",
-    "can_resume": false
-  },
-  {
     "id": "ACT_EAT_MENU",
     "type": "activity_type",
     "activity_level": "NO_EXERCISE",
@@ -1142,6 +1133,6 @@
     "activity_level": "NO_EXERCISE",
     "verb": "infusing saline",
     "based_on": "time",
-    "completion_eoc": "SALINE_INFUSION_eff"
+    "do_turn_eoc": "SALINE_INFUSION_eff"
   }
 ]
